@@ -30,7 +30,9 @@ KOMPILACJA, URUCHOMIENIE
 Najprościej kompilować używając załączonego Makefile.
 
     make clean # usuwa pliki wykonywalne
+
     make # kompiluje
+
     make run # uruchamia
 
 Jeżeli nie działa make, może to być spowodowane brakiem polecenia ctags. W takim wypadku należy
