@@ -23,3 +23,15 @@ Zaimplementować wyświetlanie zegarów w makrach println oraz debug.
 UWAGA! TO JUŻ JEST:
 w struct packet_t jest już pole "ts" - to będzie timestamp.
 Trzeba dodać zmienną clock i obwarować ją muteksami.
+
+KOMPILACJA, URUCHOMIENIE
+========================
+
+Najprościej kompilować używając załączonego Makefile.
+
+    make clean # usuwa pliki wykonywalne
+    make # kompiluje
+    make run # uruchamia
+
+Jeżeli nie działa make, może to być spowodowane brakiem polecenia ctags. W takim wypadku należy
+wykomentować regułę ctags z Makefile, albo wyrzucić ją z zależności dla reguły all
