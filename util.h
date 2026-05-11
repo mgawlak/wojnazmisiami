@@ -2,16 +2,20 @@
 #define UTILH
 #include "main.h"
 
+#define K_DOCKS     6
+#define M_MECHANICS 10
+#define MAX_R       4
 
 /* typ pakietu */
 typedef struct {
-    int ts;       /* timestamp (zegar lamporta */
-    int src;  
-
-    int data;     /* przykładowe pole z danymi; można zmienić nazwę na bardziej pasującą */
+    int ts;
+    int src;
+    int data;
+    int r;
+    int dock;
 } packet_t;
-/* packet_t ma trzy pola, więc NITEMS=3. Wykorzystane w inicjuj_typ_pakietu */
-#define NITEMS 3
+
+#define NITEMS 5
 
 /* Typy wiadomości */
 /* TYPY PAKIETÓW */
@@ -19,7 +23,6 @@ typedef struct {
 #define REQUEST 2
 #define RELEASE 3
 #define APP_PKT 4
-#define FINISH  5
 
 extern MPI_Datatype MPI_PAKIET_T;
 void inicjuj_typ_pakietu();
