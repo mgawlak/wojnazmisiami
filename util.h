@@ -30,14 +30,42 @@ void inicjuj_typ_pakietu();
 /* wysyłanie pakietu, skrót: wskaźnik do pakietu (0 oznacza stwórz pusty pakiet), do kogo, z jakim typem */
 void sendPacket(packet_t *pkt, int destination, int tag);
 
-typedef enum {InRun, InMonitor, InWant, InSection, InFinish} state_t;
+void add_to_queue(int process_id, int ts, int r, int dock);
+void remove_from_queue(int process_id);
+int compute_load(int dock);
+
+typedef enum
+{
+    WOLNY,
+    ZADANIE,
+    NAPRAWA,
+    FINISH
+} state_t;
 extern state_t stan;
 extern pthread_mutex_t stateMut;
-/* zmiana stanu, obwarowana muteksem */
+extern pthread_cond_t stateCond;
+
 void changeState( state_t );
+
+void check_entry_conditions(int total_mechanics);
 int max(int a, int b);
 
 extern int lamport_clock;
 extern pthread_mutex_t lamport_mutex;
+
+
+typedef struct
+{
+    int process_id;
+    int ts;
+    int r;
+    int dock;
+} request_entry_t;
+
+
+extern int my_dock;
+extern int my_ts;
+extern int my_r;
+extern int ack_count;
 
 #endif
