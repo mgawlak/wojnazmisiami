@@ -6,19 +6,31 @@ MPI_Datatype MPI_PAKIET_T;
  * w util.h extern state_t stan (czyli zapowiedź, że gdzieś tam jest definicja
  * tutaj w util.c state_t stan (czyli faktyczna definicja)
  */
-state_t stan=InRun;
+state_t stan = WOLNY;
 
-/* zamek wokół zmiennej współdzielonej między wątkami. 
+/* zamek wokół zmiennej współdzielonej między wątkami.
  * Zwróćcie uwagę, że każdy proces ma osobą pamięć, ale w ramach jednego
  * procesu wątki współdzielą zmienne - więc dostęp do nich powinien
  * być obwarowany muteksami
  */
 pthread_mutex_t stateMut = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  stateCond = PTHREAD_COND_INITIALIZER;
 
 int lamport_clock = 0;
 pthread_mutex_t lamport_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-struct tagNames_t{
+int my_dock = 0;
+int my_ts = 0;
+int my_r = 1;
+int ack_count = 0;
+
+#define MAX_QUEUE_SIZE 256
+request_entry_t local_queue[MAX_QUEUE_SIZE];
+int queue_size = 0;
+pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+struct tagNames_t
+{
     const char *name;
     int tag;
 } tagNames[] = { { "pakiet aplikacyjny", APP_PKT }, { "finish", FINISH}, 
@@ -40,13 +52,15 @@ void inicjuj_typ_pakietu()
        brzydzimy się czymś w rodzaju MPI_Send(&typ, sizeof(pakiet_t), MPI_BYTE....
     */
     /* sklejone z stackoverflow */
-    int       blocklengths[NITEMS] = {1,1,1};
-    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT};
+    int       blocklengths[NITEMS] = {1,1,1,1,1};
+    MPI_Datatype typy[NITEMS] = {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
 
-    MPI_Aint     offsets[NITEMS]; 
+    MPI_Aint     offsets[NITEMS];
     offsets[0] = offsetof(packet_t, ts);
     offsets[1] = offsetof(packet_t, src);
     offsets[2] = offsetof(packet_t, data);
+    offsets[3] = offsetof(packet_t, r);
+    offsets[4] = offsetof(packet_t, dock);
 
     MPI_Type_create_struct(NITEMS, blocklengths, offsets, typy, &MPI_PAKIET_T);
 
@@ -60,10 +74,10 @@ void sendPacket(packet_t *pkt, int destination, int tag)
     if (pkt==0) { pkt = malloc(sizeof(packet_t)); freepkt=1;}
     pkt->src = rank;
 
-    pthread_mutex_lock( &stateMut );
+    pthread_mutex_lock( &lamport_mutex );
     lamport_clock++;
     pkt->ts = lamport_clock;
-    pthread_mutex_unlock( &stateMut );
+    pthread_mutex_unlock( &lamport_mutex );
 
     MPI_Send( pkt, 1, MPI_PAKIET_T, destination, tag, MPI_COMM_WORLD);
     debug("Wysyłam %s do %d\n", tag2string( tag), destination);
@@ -73,11 +87,12 @@ void sendPacket(packet_t *pkt, int destination, int tag)
 void changeState( state_t newState )
 {
     pthread_mutex_lock( &stateMut );
-    if (stan==InFinish) { 
-	pthread_mutex_unlock( &stateMut );
+    if (stan==FINISH) {
+        pthread_mutex_unlock( &stateMut );
         return;
     }
     stan = newState;
+    pthread_cond_broadcast( &stateCond );
     pthread_mutex_unlock( &stateMut );
 }
 
