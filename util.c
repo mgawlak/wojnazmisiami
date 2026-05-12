@@ -96,6 +96,49 @@ void changeState( state_t newState )
     pthread_mutex_unlock( &stateMut );
 }
 
+void check_entry_conditions(int total_mechanics)
+{
+    pthread_mutex_lock( &stateMut );
+    if (stan != ZADANIE) {
+        pthread_mutex_unlock( &stateMut );
+        return;
+    }
+    int ac = ack_count;
+    pthread_mutex_unlock( &stateMut );
+
+    if (ac != size - 1) return;
+
+
+    pthread_mutex_lock(&queue_mutex);
+
+
+    int first = 0;
+    for (int i = 0; i < queue_size; i++)
+    {
+        if (local_queue[i].dock == my_dock)
+        {
+            first = (local_queue[i].process_id == rank &&
+                     local_queue[i].ts == my_ts);
+            break;
+        }
+    }
+
+
+    int sum = 0;
+    for (int i = 0; i < queue_size; i++)
+    {
+        if (local_queue[i].process_id == rank && local_queue[i].ts == my_ts)
+            break;
+        sum += local_queue[i].r;
+    }
+    int enough = (sum + my_r <= total_mechanics);
+
+    pthread_mutex_unlock(&queue_mutex);
+
+    if (first && enough)
+        changeState(NAPRAWA);
+}
+
 int max(int a, int b)
 {
     if (a>b)
@@ -103,4 +146,85 @@ int max(int a, int b)
         return a;
     }
     return b;
+}
+
+
+static int compare_requests(const request_entry_t *a, const request_entry_t *b)
+{
+    if (a->ts != b->ts)
+        return a->ts - b->ts;
+    return a->process_id - b->process_id;
+}
+
+
+void add_to_queue(int process_id, int ts, int r, int dock)
+{
+    pthread_mutex_lock(&queue_mutex);
+
+    if (queue_size >= MAX_QUEUE_SIZE)
+    {
+        pthread_mutex_unlock(&queue_mutex);
+        return;
+    }
+
+
+    local_queue[queue_size].process_id = process_id;
+    local_queue[queue_size].ts = ts;
+    local_queue[queue_size].r = r;
+    local_queue[queue_size].dock = dock;
+    queue_size++;
+
+
+    for (int i = queue_size - 1; i > 0; i--)
+    {
+        if (compare_requests(&local_queue[i], &local_queue[i - 1]) < 0)
+        {
+            request_entry_t tmp = local_queue[i];
+            local_queue[i] = local_queue[i - 1];
+            local_queue[i - 1] = tmp;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&queue_mutex);
+}
+
+
+void remove_from_queue(int process_id)
+{
+    pthread_mutex_lock(&queue_mutex);
+
+    for (int i = 0; i < queue_size; i++)
+    {
+        if (local_queue[i].process_id == process_id)
+        {
+            for (int j = i; j < queue_size - 1; j++)
+            {
+                local_queue[j] = local_queue[j + 1];
+            }
+            queue_size--;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&queue_mutex);
+}
+
+
+int compute_load(int dock)
+{
+    pthread_mutex_lock(&queue_mutex);
+    int count = 0;
+    for (int i = 0; i < queue_size; i++)
+    {
+        if (local_queue[i].dock == dock)
+        {
+            count++;
+        }
+    }
+    pthread_mutex_unlock(&queue_mutex);
+    return count;
 }
