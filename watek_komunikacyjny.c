@@ -1,32 +1,46 @@
 #include "main.h"
 #include "watek_komunikacyjny.h"
 
-/* wątek komunikacyjny; zajmuje się odbiorem i reakcją na komunikaty */
 void *startKomWatek(void *ptr)
 {
     MPI_Status status;
-    int is_message = FALSE;
     packet_t pakiet;
-    /* Obrazuje pętlę odbierającą pakiety o różnych typach */
-    while (stan != InFinish)
-    {
-        debug("czekam na recv");
-        pthread_mutex_lock( &stateMut );
-        lamport_clock = max(lamport_clock, pakiet.ts) + 1;
-        pthread_mutex_unlock( &stateMut );
-        MPI_Recv(&pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
+    while (stan != FINISH)
+    {
+        MPI_Recv(&pakiet, 1, MPI_PAKIET_T, MPI_ANY_SOURCE, MPI_ANY_TAG,
+                 MPI_COMM_WORLD, &status);
+
+        pthread_mutex_lock(&lamport_mutex);
+        lamport_clock = max(lamport_clock, pakiet.ts) + 1;
+        pthread_mutex_unlock(&lamport_mutex);
+
+        int dock = pakiet.dock;
+        int r    = pakiet.r;
 
         switch (status.MPI_TAG)
         {
         case REQUEST:
-            debug("Ktoś coś prosi. A niech ma!")
-                sendPacket(0, status.MPI_SOURCE, ACK);
+            debug("REQUEST od %d (dok=%d, r=%d)", pakiet.src, dock, r);
+            add_to_queue(pakiet.src, pakiet.ts, r, dock);
+            sendPacket(NULL, pakiet.src, ACK);
+            check_entry_conditions(M_MECHANICS);
             break;
+
         case ACK:
-            debug("Dostałem ACK od %d, mam już %d", status.MPI_SOURCE, ackCount);
-            ackCount++; /* czy potrzeba tutaj muteksa? Będzie wyścig, czy nie będzie? Zastanówcie się. */
+            debug("ACK od %d", pakiet.src);
+            pthread_mutex_lock(&stateMut);
+            ack_count++;
+            pthread_mutex_unlock(&stateMut);
+            check_entry_conditions(M_MECHANICS);
             break;
+
+        case RELEASE:
+            debug("RELEASE od %d (dok=%d, r=%d)", pakiet.src, dock, r);
+            remove_from_queue(pakiet.src);
+            check_entry_conditions(M_MECHANICS);
+            break;
+
         default:
             break;
         }
